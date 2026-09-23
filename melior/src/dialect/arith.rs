@@ -148,7 +148,7 @@ melior_macro::binary_operations!(
     ]
 );
 
-melior_macro::unary_operations!(arith, [negf, truncf]);
+melior_macro::unary_operations!(arith, [negf]);
 
 melior_macro::typed_unary_operations!(
     arith,
@@ -162,6 +162,7 @@ melior_macro::typed_unary_operations!(
         index_cast,
         index_castui,
         sitofp,
+        truncf,
         trunci,
         uitofp
     ]

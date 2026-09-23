@@ -9,6 +9,7 @@ pub mod diagnostic;
 pub mod dialect;
 mod error;
 mod execution_engine;
+pub mod lljit;
 #[cfg(feature = "helpers")]
 pub mod helpers;
 pub mod ir;
@@ -24,6 +25,7 @@ pub use self::{
     context::{Context, ContextRef},
     error::Error,
     execution_engine::ExecutionEngine,
+    lljit::{Lljit, JitDylib, ThreadSafeModule},
     string_ref::StringRef,
 };
 

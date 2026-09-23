@@ -31,6 +31,7 @@ pub enum Error {
     TypeExpected(&'static str, String),
     UnknownDiagnosticSeverity(u32),
     Utf8(Utf8Error),
+    Lljit(String),
 }
 
 impl Display for Error {
@@ -79,6 +80,9 @@ impl Display for Error {
             }
             Self::Utf8(error) => {
                 write!(formatter, "{error}")
+            }
+            Self::Lljit(message) => {
+                write!(formatter, "LLJIT error: {message}")
             }
         }
     }

@@ -6,17 +6,19 @@ use crate::{
         Attribute, Identifier, Location, Operation, Region, Type, Value,
         attribute::{
             DenseI32ArrayAttribute, DenseI64ArrayAttribute, IntegerAttribute, StringAttribute,
-            TypeAttribute,
+            TypeAttribute, FlatSymbolRefAttribute
         },
         operation::OperationBuilder,
         r#type::IntegerType,
     },
 };
+use self::attributes::{linkage, Linkage};
 pub use alloca_options::*;
 pub use load_store_options::*;
 
 mod alloca_options;
 pub mod attributes;
+pub mod debug_info;
 mod load_store_options;
 pub mod r#type;
 
@@ -362,6 +364,140 @@ pub fn zext<'c>(
     OperationBuilder::new("llvm.zext", location)
         .add_operands(&[value])
         .add_results(&[result_type])
+        .build()
+        .expect("valid operation")
+}
+
+/// Create a `llvm.mlir.addressof` operation.
+pub fn addressof<'c>(
+    context: &'c Context,
+    name: &str,
+    r#type: Type<'c>,
+    location: Location<'c>,
+) -> Operation<'c> {
+    OperationBuilder::new("llvm.mlir.addressof", location)
+        .add_attributes(&[(
+            Identifier::new(context, "global_name"),
+            FlatSymbolRefAttribute::new(context, name).into(),
+        )])
+        .add_results(&[r#type.into()])
+        .build()
+        .expect("valid operation")
+}
+
+/// Creates a `llvm.mlir.global` operation (constant).
+pub fn global<'c>(
+    context: &'c Context,
+    name: StringAttribute<'c>,
+    value: Option<Attribute<'c>>,
+    r#type: Type<'c>,
+    region: Region<'c>,
+    location: Location<'c>,
+) -> Operation<'c> {
+    global_with_mutability(context, name, value, r#type, region, true, location)
+}
+
+/// Creates a mutable `llvm.mlir.global` operation.
+pub fn global_mutable<'c>(
+    context: &'c Context,
+    name: StringAttribute<'c>,
+    value: Option<Attribute<'c>>,
+    r#type: Type<'c>,
+    region: Region<'c>,
+    location: Location<'c>,
+) -> Operation<'c> {
+    global_with_mutability(context, name, value, r#type, region, false, location)
+}
+
+fn global_with_mutability<'c>(
+    context: &'c Context,
+    name: StringAttribute<'c>,
+    value: Option<Attribute<'c>>,
+    r#type: Type<'c>,
+    region: Region<'c>,
+    is_constant: bool,
+    location: Location<'c>,
+) -> Operation<'c> {
+    let mut attrs = vec![
+        (Identifier::new(context, "sym_name"), name.into()),
+        (
+            Identifier::new(context, "global_type"),
+            TypeAttribute::new(r#type.into()).into(),
+        ),
+        (
+            Identifier::new(context, "linkage"),
+            linkage(context, Linkage::Internal),
+        ),
+    ];
+
+    if is_constant {
+        attrs.push((
+            Identifier::new(context, "constant"),
+            Attribute::unit(context),
+        ));
+    }
+
+    let mut builder = OperationBuilder::new("llvm.mlir.global", location)
+        .add_attributes(&attrs)
+        .add_regions([region]);
+
+    if let Some(value) = value {
+        builder = builder.add_attributes(&[(Identifier::new(context, "value"), value.into())]);
+    }
+
+    builder.build().expect("valid operation")
+}
+
+/// Creates a `llvm.call` operation.
+pub fn call<'c>(
+    context: &'c Context,
+    callee: FlatSymbolRefAttribute<'c>,
+    args: &[Value<'c, '_>],
+    results: &[Type<'c>],
+    location: Location<'c>,
+) -> Operation<'c> {
+    OperationBuilder::new("llvm.call", location)
+        .add_operands(args)
+        .add_attributes(&[
+            (Identifier::new(context, "callee"), callee.into())
+        ])
+        .add_results(results)
+        .build()
+        .expect("valid operation")
+}
+
+/// Creates an indirect `llvm.call` operation.
+///
+/// For indirect calls, the callee is a function pointer value (not a symbol).
+/// The callee_type should be the LLVM function type being called.
+pub fn call_indirect<'c>(
+    context: &'c Context,
+    callee: Value<'c, '_>,
+    args: &[Value<'c, '_>],
+    callee_type: Type<'c>,
+    results: &[Type<'c>],
+    location: Location<'c>,
+) -> Operation<'c> {
+    // For indirect calls, callee pointer AND all args go into callee_operands
+    let mut operands = vec![callee];
+    operands.extend_from_slice(args);
+
+    // operandSegmentSizes: [callee_operands, op_bundle_operands]
+    // All operands (callee ptr + args) go into callee_operands, 0 in op_bundle
+    let operand_segment_sizes = DenseI32ArrayAttribute::new(
+        context,
+        &[operands.len() as i32, 0],
+    );
+    let op_bundle_sizes = DenseI32ArrayAttribute::new(context, &[]);
+
+    OperationBuilder::new("llvm.call", location)
+        .add_attributes(&[
+            (Identifier::new(context, "callee_type"), TypeAttribute::new(callee_type).into()),
+            (Identifier::new(context, "operand_segment_sizes"), operand_segment_sizes.into()),
+            (Identifier::new(context, "op_bundle_sizes"), op_bundle_sizes.into()),
+        ])
+        .add_operands(&operands)
+        .add_results(results)
         .build()
         .expect("valid operation")
 }

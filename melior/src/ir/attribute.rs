@@ -8,7 +8,7 @@ mod bool;
 mod dense_elements;
 mod dense_i32_array;
 mod dense_i64_array;
-mod distinct;
+pub mod distinct;
 mod flat_symbol_ref;
 mod float;
 mod integer;
